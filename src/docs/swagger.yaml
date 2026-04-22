@@ -1,0 +1,215 @@
+openapi: 3.0.0
+info:
+  title: Task Management API
+  version: 1.0.0
+  description: >
+    A robust backend API for managing tasks with secure JWT authentication and role-based access.
+    
+    **Testing via UI:**
+    To test protected routes like `/tasks`, first use `/auth/login` to get a token. 
+    Then, click the **Authorize** button at the top of the page and paste your token into the box.
+    You can then test all the other endpoints directly from this page!
+servers:
+  - url: http://localhost:8000/api/v1
+    description: Local Development Server (v1)
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        _id:
+          type: string
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [user, admin]
+    
+    Task:
+      type: object
+      properties:
+        _id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        userId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+# Apply the security schema globally to all routes
+# We will explicitly override it with an empty array `[]` on public routes like register/login
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      summary: Register a new user
+      tags: [Authentication]
+      security: [] # Public route, no auth required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  example: John Doe
+                email:
+                  type: string
+                  example: john@example.com
+                password:
+                  type: string
+                  example: superSecret123
+                role:
+                  type: string
+                  example: user
+      responses:
+        '201':
+          description: User successfully registered
+        '400':
+          description: Validation error or duplicate email
+          
+  /auth/login:
+    post:
+      summary: Login and receive a JWT token
+      tags: [Authentication]
+      security: [] # Public route, no auth required
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  example: john@example.com
+                password:
+                  type: string
+                  example: superSecret123
+      responses:
+        '200':
+          description: Successfully authenticated (Returns JWT Token)
+        '401':
+          description: Invalid credentials
+
+  /tasks:
+    get:
+      summary: Get all tasks
+      description: Returns tasks belonging to the authenticated user. Admins will receive all tasks in the database.
+      tags: [Tasks]
+      responses:
+        '200':
+          description: List of tasks successfully retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: success
+                  results:
+                    type: integer
+                    example: 1
+                  data:
+                    type: object
+                    properties:
+                      tasks:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized - Invalid or missing token
+
+    post:
+      summary: Create a new task
+      tags: [Tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, description]
+              properties:
+                title:
+                  type: string
+                  example: Buy Groceries
+                description:
+                  type: string
+                  example: Milk, Eggs, Bread
+      responses:
+        '201':
+          description: Task successfully created
+        '400':
+          description: Validation error
+
+  /tasks/{id}:
+    parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        description: The unique MongoDB ID of the task
+        
+    put:
+      summary: Update a specific task
+      description: Updates a task. You must either own the task or be an admin to perform this action.
+      tags: [Tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  example: Buy Groceries (Updated)
+                description:
+                  type: string
+                  example: Milk, Eggs, Bread, and Cheese
+      responses:
+        '200':
+          description: Task successfully updated
+        '400':
+          description: Validation error (e.g., empty request body)
+        '403':
+          description: Forbidden - You are not authorized to modify someone else's task
+        '404':
+          description: Task not found
+
+    delete:
+      summary: Delete a specific task
+      description: Deletes a task. You must either own the task or be an admin to perform this action.
+      tags: [Tasks]
+      responses:
+        '204':
+          description: Task successfully deleted (No content returned)
+        '403':
+          description: Forbidden - You are not authorized to delete someone else's task
+        '404':
+          description: Task not found
